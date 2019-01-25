@@ -153,7 +153,7 @@ function labels = get_signal_labels(signal_names)
             case 'joint_ang'
                 labels{sig_idx} = strcat(get_joint_labels(),'_ang');
             case 'joint_vel'
-                labels{sig_idx} = strcat(get_joint_lables(),'_vel');
+                labels{sig_idx} = strcat(get_joint_labels(),'_vel');
             case 'muscle_len'
                 labels{sig_idx} = strcat(get_muscle_labels(),'_len');
             case 'muscle_vel'
@@ -440,7 +440,7 @@ function out = processCDS(filename,signal_info)
     
     % extract signals
     samp_rate = zeros(1,length(signal_names));
-    [timevec_cell,cont_data_cell,signal_labels] = deal(cell(1,length(signal_names)));
+    [timevec_cell,cont_data,signal_labels] = deal(cell(1,length(signal_names)));
     for signum = 1:length(signal_names)
         switch lower(signal_names{signum})
             case 'kin'
@@ -539,7 +539,7 @@ function out = processCDS(filename,signal_info)
                 error('No idea what this signal is (%s)',signal_names{signum})
         end
         signal_labels{signum} = data_table.Properties.VariableNames(data_cols);
-        cont_data_cell{signum} = data_table{:,data_cols};
+        cont_data{signum} = data_table{:,data_cols};
         timevec_cell{signum} = data_table.t;
         samp_rate(signum) = 1/mode(diff(data_table.t));
     end
@@ -554,7 +554,7 @@ function out = processCDS(filename,signal_info)
             assert(signum~=maxrate_idx,'Something went wrong with the resample code...')
             
             % figure out where the NaNs are before resampling (mostly for markers, to see where they cut out)
-            nan_spots = isnan(cont_data_cell{signum});
+            nan_spots = isnan(cont_data{signum});
             if any(any(nan_spots))
                 nanblock_thresh = 0.3/mode(diff(timevec_cell{signum})); % tolerate nan blocks up to 0.3 seconds long
                 nan_transitions = diff([zeros(1,size(nan_spots,2));nan_spots;zeros(1,size(nan_spots,2))]);
@@ -577,18 +577,18 @@ function out = processCDS(filename,signal_info)
             % need to resample
             % need to detrend first...
             % detrend first because resample assumes endpoints are 0
-            a = zeros(2,size(cont_data_cell{signum},2));
-            dataDetrend = zeros(size(cont_data_cell{signum},1),size(cont_data_cell{signum},2));
-            for i = 1:size(cont_data_cell{signum},2)
+            a = zeros(2,size(cont_data{signum},2));
+            dataDetrend = zeros(size(cont_data{signum},1),size(cont_data{signum},2));
+            for i = 1:size(cont_data{signum},2)
                 % in case start or end are nans
-                nanners = isnan(cont_data_cell{signum}(:,i));
-                data_poly = cont_data_cell{signum}(~nanners,i);
+                nanners = isnan(cont_data{signum}(:,i));
+                data_poly = cont_data{signum}(~nanners,i);
                 
                 t_poly = timevec_cell{signum}(~nanners);
                 a(1,i) = (data_poly(end)-data_poly(1))/(t_poly(end)-t_poly(1));
                 a(2,i) = data_poly(1);
                 
-                dataDetrend(:,i) = cont_data_cell{signum}(:,i)-polyval(a(:,i),timevec_cell{signum});
+                dataDetrend(:,i) = cont_data{signum}(:,i)-polyval(a(:,i),timevec_cell{signum});
             end
             temp=resample(dataDetrend,P,Q);
         
@@ -596,7 +596,7 @@ function out = processCDS(filename,signal_info)
             % using upsample -> downsample to save memory (it's the same thing
             % as the reverse) but it adds extra points at the end that aren't
             % in the resampled data
-            resamp_vec = ones(size(cont_data_cell{signum},1),1);
+            resamp_vec = ones(size(cont_data{signum},1),1);
             resamp_vec = upsample(downsample(resamp_vec,Q),P);
             ty=upsample(downsample(timevec_cell{signum},Q),P);
             ty=interp1(find(resamp_vec>0),ty(resamp_vec>0),(1:length(ty))');
@@ -623,7 +623,7 @@ function out = processCDS(filename,signal_info)
             end
             
             % assign back into cell
-            cont_data_cell{signum} = dataResampled;
+            cont_data{signum} = dataResampled;
             timevec_cell{signum} = ty;
         end
         
@@ -636,12 +636,12 @@ function out = processCDS(filename,signal_info)
     t = (0:dt:t_end)';
     for signum = 1:length(signal_names)
         % interpolate to new time vector (fill extrapolated points with NaNs)
-        cont_data_cell{signum} = interp1(timevec_cell{signum},cont_data_cell{signum},t);
+        cont_data{signum} = interp1(timevec_cell{signum},cont_data{signum},t);
     end
     
     % try horizontally concatenating...If everything went well, things should
     % be the right length...
-    cont_data = horzcat(cont_data_cell{:});
+    cont_data = horzcat(cont_data{:});
     cont_labels = horzcat(signal_labels{:});
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
