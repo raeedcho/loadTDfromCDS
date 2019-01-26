@@ -55,8 +55,6 @@ function trial_data = loadTDfromCDS(filename,params)
     assert(isnumeric(bin_size),'bin_size needs to be a number')
     assert(iscell(trial_meta),'trial_meta needs to be a cell')
     assert(isempty(meta) || isstruct(meta),'meta needs to be a struct')
-
-    meta.task={'TRT'}; % for the loading of cds
     
     %% Make TD
     cont_signal_labels = get_signal_labels(cont_signal_names);
