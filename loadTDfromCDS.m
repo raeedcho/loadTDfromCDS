@@ -4,7 +4,8 @@ function trial_data = loadTDfromCDS(filename,params)
     %   Inputs:
     %       filename - (string) location and name of CDS file to load
     %       params - (struct) indicating which signals to load into trial_data
-    %           array_name - (string) name of array, e.g. 'S1'
+    %           array_name - (string or cell array of strings) name of
+    %               array, e.g. 'S1' or {'S1','cuneate'}
     %           cont_signal_names - (cell array of strings) list of signal names to extract.
     %               Could be one of:
     %                   'pos'
@@ -41,7 +42,8 @@ function trial_data = loadTDfromCDS(filename,params)
     bin_size = 0.01;
     trial_meta = {};
     meta = [];
-    array_name = 'S1';
+    array_name = '';
+    cds_array_name = '';
 
     assignParams(who,params)
 
@@ -55,6 +57,27 @@ function trial_data = loadTDfromCDS(filename,params)
     assert(isnumeric(bin_size),'bin_size needs to be a number')
     assert(iscell(trial_meta),'trial_meta needs to be a cell')
     assert(isempty(meta) || isstruct(meta),'meta needs to be a struct')
+    assert(~isempty(array_name), 'array_name is missing')
+    if isempty(cds_array_name)
+        warning('CDS array name not provided')
+    end
+    
+    if ~iscell(array_name)
+        array_name = {array_name};
+    end
+    assert(ischar(array_name{1}),'array_name must contain a string')
+    
+    if ~isempty(cds_array_name)
+        if ~iscell(cds_array_name) && ~isempty(cds_array_name)
+            cds_array_name = {cds_array_name};
+        end
+        assert(ischar(cds_array_name{1}),'cds_array_name must contain a string')
+        
+        assert(length(array_name)==length(cds_array_name),'Length of array_name must match length of cds_array_name (if provided)')
+    else
+        cds_array_name = repmat({''},size(array_name));
+    end
+    
     
     %% Make TD
     cont_signal_labels = get_signal_labels(cont_signal_names);
@@ -76,15 +99,18 @@ function trial_data = loadTDfromCDS(filename,params)
     
     %% load it in
     % get signal info
-    signal_info = { ...
-        initSignalStruct( ...
+    signal_info = cell(1,length(array_name)+1);
+    for arraynum = 1:length(array_name)
+        signal_info{arraynum} = initSignalStruct( ...
             'filename',filename, ...
             'routine',spike_routine, ...
-            'params',struct(), ... % can pass arbitrary parameters. Shouldn't need much with CDS
-            'name',array_name, ... % it gets stored under this name... in case of spikes, this gives S1_spikes
+            'params',struct('cds_array_name',cds_array_name{arraynum}), ... 
+            'name',array_name{arraynum}, ... % it gets stored under this name... in case of spikes, this gives S1_spikes
             'type','spikes', ... % which type... see documentation of initSignalStruct
-            'label',''), ... % label can be indices or strings
-        initSignalStruct( ... % continuous data
+            'label','');
+    end
+    
+    signal_info{end} = initSignalStruct( ... % continuous data
             'filename',filename, ...
             'routine',cds_routine, ...
             'params',struct('trial_meta',{trial_meta}), ...
@@ -103,8 +129,7 @@ function trial_data = loadTDfromCDS(filename,params)
                 strcat('EMG_',emg_signal_names),...
                 event_names,...
                 ], ... % can also pass [1 2],[3 4] etc if you know the arrangment of the signals in the data struct
-            'operation',[]), ...
-        };
+            'operation',[]);
     
     % load trial_data (will result in warning for no meta info, but we're
     % taking most meta info from the CDS anyway)
@@ -283,13 +308,17 @@ function names = get_muscle_labels()
         };
 end
 
-function out = processCDSspikes(filename,params)
+function out = processCDSspikes(filename,signal_info)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % loads a CDS file and returns a field
     spiking_chans  = 1:96;
     exclude_units  = 255; % sort id of units to exclude
-    assignParams(who,params); % overwrite parameters
+    cds_array_name = '';
+    assignParams(who,signal_info.params); % overwrite parameters
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % parameter check
+    assert(ischar(cds_array_name),'array_name must be a string')
+    
     error_flag = false;
     
     % load the CDS
@@ -313,8 +342,11 @@ function out = processCDSspikes(filename,params)
     
     labels = [vertcat(cds.units.chan) vertcat(cds.units.ID)];
     
-    % remove bogus units
+    % remove unwanted units
     bad_idx = ~ismember(labels(:,1),spiking_chans) | ismember(labels(:,2),exclude_units);
+    if ~isempty(cds_aray_name)
+        bad_idx = bad_idx | ~ismember(cat(2,{cds.units.array})',cds_array_name);
+    end
     labels = labels(~bad_idx,:);
     data = data(~bad_idx);
     wf = wf(~bad_idx);
