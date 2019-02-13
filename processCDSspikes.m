@@ -34,7 +34,7 @@ function out = processCDSspikes(filename,signal_info)
     
     % remove unwanted units
     bad_idx = ~ismember(labels(:,1),spiking_chans) | ismember(labels(:,2),exclude_units);
-    if ~isempty(cds_aray_name)
+    if ~isempty(cds_array_name)
         bad_idx = bad_idx | ~ismember(cat(2,{cds.units.array})',cds_array_name);
     end
     labels = labels(~bad_idx,:);
