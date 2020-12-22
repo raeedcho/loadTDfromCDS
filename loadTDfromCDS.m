@@ -6,6 +6,8 @@ function trial_data = loadTDfromCDS(filename,params)
     %       params - (struct) indicating which signals to load into trial_data
     %           array_name - (string or cell array of strings) name of
     %               array, e.g. 'S1' or {'S1','cuneate'}
+    %           cds_array_name - (string or cell array of strings) name of array(s) in CDS,
+    %               e.g. 'LeftS1Area2'
     %           cont_signal_names - (cell array of strings) list of signal names to extract.
     %               Could be one of:
     %                   'pos'
@@ -26,6 +28,9 @@ function trial_data = loadTDfromCDS(filename,params)
     %                   'opensim_elbow_acc'
     %               List needs to be in row vector form (default: {})
     %           extract_emg - (bool) whether or not to extract emg signals (default: false)
+    %           emg_HPF_cutoff - frequency in Hz for EMG HPF cutoff
+    %           emg_LPF_cutoff - frequency in Hz for EMG LPF cutoff
+    %           emg_n_poles - (scalar int) number of poles for EMG butterworth filter
     %           event_names - (cell array of string) list of event names to extract.
     %               Only supports events that end in 'Time' (default: {'startTime','endTime'})
     %           bin_size - (numeric) bin size at which to load trial_data (default: 0.01)
@@ -45,12 +50,18 @@ function trial_data = loadTDfromCDS(filename,params)
     array_name = '';
     cds_array_name = '';
 
+    % undocumented parameters
+    emg_LPF_cutoff  =  50;    % for EMG butterworth filter
+    emg_HPF_cutoff  =  [10 900];    % for EMG butterworth filter
+    emg_n_poles     =  4;     % for EMG butterworth filter
+
     assignParams(who,params)
 
     % check filename
     assert(ischar(filename),'filename must be a string')
 
     %% parameter integrity checks
+    assert(isnumeric(emg_LPF_cutoff) && isnumeric(emg_HPF_cutoff) && isnumeric(emg_n_poles), 'emg filter parameters must be numeric')
     assert(iscell(cont_signal_names),'cont_signal_names needs to be a cell array')
     assert(islogical(extract_emg),'extract_emg needs to be a bool')
     assert(iscell(event_names),'event_names needs to be a cell array')
@@ -91,10 +102,13 @@ function trial_data = loadTDfromCDS(filename,params)
     end
     
     % trial_data loading parameters...
+    td_params = struct(...
+        'bin_size',bin_size,...
+        'emg_LPF_cutoff',emg_LPF_cutoff,...
+        'emg_HPF_cutoff',emg_HPF_cutoff,...
+        'emg_n_poles',emg_n_poles);
     if ~isempty(meta)
-        td_params = struct('bin_size',bin_size,'meta',meta);
-    else
-        td_params = struct('bin_size',bin_size);
+        td_params.meta = meta;
     end
     
     %% load it in
